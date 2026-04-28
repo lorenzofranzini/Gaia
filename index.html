@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong Modern</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="score">
+            <span id="player1Score">0</span> - <span id="player2Score">0</span>
+        </div>
+        <div id="countdown">3</div>
+        <button id="startButton">Inizia Partita</button>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    background: linear-gradient to bottom, #2c3e50, #34495e); /* Sfondo scuro e sfumato */
+    font-family: 'Press Start 2P', cursive; /* Un font in stile arcade */
+    color: #ecf0f1;
+}
+
+#game-container {
+    position: relative;
+    border: 5px solid #ecf0f1; /* Bordo luminoso */
+    box-shadow: 0 0 30px rgba(236, 240, 241, 0.7); /* Ombra luminosa */
+    border-radius: 10px;
+    overflow: hidden;
+    background-color: #1a242c; /* Lo sfondo del gioco un po' più scuro */
+}
+
+canvas {
+    display: block;
+    background-color: transparent; /* Il canvas è trasparente, il container ha il colore di fondo */
+}
+
+#score {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 2.5em;
+    color: #ecf0f1;
+    text-shadow: 0 0 10px rgba(236, 240, 241, 0.8);
+    z-index: 10;
+}
+
+#countdown {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 5em;
+    color: #c0392b; /* Rosso acceso */
+    text-shadow: 0 0 20px rgba(192, 57, 43, 0.8);
+    z-index: 100;
+    display: none; /* Inizialmente nascosto */
+}
+
+#startButton {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 15px 30px;
+    font-size: 1.8em;
+    background-color: #27ae60; /* Verde brillante */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
+    transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+    z-index: 100;
+}
+
+#startButton:hover {
+    background-color: #2ecc71;
+    transform: translate(-50%, -50%) scale(1.05);
+    box-shadow: 0 8px 20px rgba(46, 204, 113, 0.6);
+}
+
+/* Importa il font arcade da Google Fonts */
+@import url('[fonts.googleapis.com](https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap)');
+
+/* Aggiungi una linea tratteggiata al centro del campo */
+#game-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 100%;
+    background: repeating-linear-gradient(to bottom, #7f8c8d, #7f8c8d 10px, transparent 10px, transparent 20px);
+    z-index: 1;
+}
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const player1ScoreSpan = document.getElementById('player1Score');
+const player2ScoreSpan = document.getElementById('player2Score');
+const startButton = document.getElementById('startButton');
+const countdownDiv = document.getElementById('countdown');
+
+const GAME_WIDTH = canvas.width;
+const GAME_HEIGHT = canvas.height;
+
+// Oggetto palla
+const ball = {
+    x: GAME_WIDTH / 2,
+    y: GAME_HEIGHT / 2,
+    radius: 10,
+    speed: 5,
+    dx: 5, // Direzione x
+    dy: 5, // Direzione y
+    color: '#e74c3c' // Rosso della palla
+};
+
+// Oggetti racchette
+const paddleWidth = 15;
+const paddleHeight = 100;
+const paddleSpeed = 8;
+
+const player1 = {
+    x: 10,
+    y: GAME_HEIGHT / 2 - paddleHeight / 2,
+    width: paddleWidth,
+    height: paddleHeight,
+    dy: 0, // Movimento della racchetta
+    score: 0,
+    color: '#3498db' // Blu della racchetta 1
+};
+
+const player2 = {
+    x: GAME_WIDTH - paddleWidth - 10,
+    y: GAME_HEIGHT / 2 - paddleHeight / 2,
+    width: paddleWidth,
+    height: paddleHeight,
+    dy: 0,
+    score: 0,
+    color: '#9b59b6' // Viola della racchetta 2
+};
+
+let gameRunning = false;
+let gameInterval;
+let countdownInterval;
+
+// Funzione per disegnare elementi
+function drawRect(x, y, width, height, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, width, height);
+}
+
+function drawCircle(x, y, radius, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2, false);
+    ctx.fill();
+}
+
+// Funzione per aggiornare il gioco
+function update() {
+    if (!gameRunning) return;
+
+    // Movimento palla
+    ball.x += ball.dx;
+    ball.y += ball.dy;
+
+    // collisioni palla con muri superiori/inferiori
+    if (ball.y + ball.radius > GAME_HEIGHT || ball.y - ball.radius < 0) {
+        ball.dy *= -1;
+    }
+
+    // Collisioni palla con racchette
+    // Player 1
+    if (ball.x - ball.radius < player1.x + player1.width &&
+        ball.y + ball.radius > player1.y &&
+        ball.y - ball.radius < player1.y + player1.height) {
+        
+        ball.dx *= -1.1; // Aumenta leggermente la velocità ad ogni rimbalzo
+        // Sposta la palla fuori dalla racchetta per evitare che si incastri
+        ball.x = player1.x + player1.width + ball.radius;
+    }
+
+    // Player 2
+    if (ball.x + ball.radius > player2.x &&
+        ball.y + ball.radius > player2.y &&
+        ball.y - ball.radius < player2.y + player2.height) {
+
+        ball.dx *= -1.1; // Aumenta leggermente la velocità ad ogni rimbalzo
+        // Sposta la palla fuori dalla racchetta per evitare che si incastri
+        ball.x = player2.x - ball.radius;
+    }
+
+    // Punti per Player 2 (palla supera racchetta Player 1)
+    if (ball.x - ball.radius < 0) {
+        player2.score++;
+        player2ScoreSpan.textContent = player2.score;
+        resetBall();
+    }
+
+    // Punti per Player 1 (palla supera racchetta Player 2)
+    if (ball.x + ball.radius > GAME_WIDTH) {
+        player1.score++;
+        player1ScoreSpan.textContent = player1.score;
+        resetBall();
+    }
+
+    // Movimento racchette
+    player1.y += player1.dy;
+    player2.y += player2.dy;
+
+    // Evita che le racchette escano dal campo
+    player1.y = Math.max(0, Math.min(GAME_HEIGHT - player1.height, player1.y));
+    player2.y = Math.max(0, Math.min(GAME_HEIGHT - player2.height, player2.y));
+}
+
+// Funzione per disegnare tutto
+function draw() {
+    ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT); // Svuota il canvas
+
+    // Disegna racchette
+    drawRect(player1.x, player1.y, player1.width, player1.height, player1.color);
+    drawRect(player2.x, player2.y, player2.width, player2.height, player2.color);
+
+    // Disegna palla
+    drawCircle(ball.x, ball.y, ball.radius, ball.color);
+}
+
+// Funzione per resettare la palla
+function resetBall() {
+    ball.x = GAME_WIDTH / 2;
+    ball.y = GAME_HEIGHT / 2;
+    ball.speed = 5; // Resetta la velocità
+    ball.dx = (Math.random() > 0.5 ? 1 : -1) * ball.speed; // Direzione orizzontale casuale
+    ball.dy = (Math.random() > 0.5 ? 1 : -1) * ball.speed; // Direzione verticale casuale
+}
+
+// Loop di gioco principale
+function gameLoop() {
+    update();
+    draw();
+    if (gameRunning) {
+        requestAnimationFrame(gameLoop);
+    }
+}
+
+// Gestione input tastiera
+document.addEventListener('keydown', e => {
+    switch (e.key) {
+        // Player 1
+        case 'w':
+            player1.dy = -paddleSpeed;
+            break;
+        case 's':
+            player1.dy = paddleSpeed;
+            break;
+        // Player 2
+        case 'ArrowUp':
+            player2.dy = -paddleSpeed;
+            break;
+        case 'ArrowDown':
+            player2.dy = paddleSpeed;
+            break;
+    }
+});
+
+document.addEventListener('keyup', e => {
+    switch (e.key) {
+        // Player 1
+        case 'w':
+        case 's':
+            player1.dy = 0;
+            break;
+        // Player 2
+        case 'ArrowUp':
+        case 'ArrowDown':
+            player2.dy = 0;
+            break;
+    }
+});
+
+// Funzione per avviare il countdown e la partita
+function startGameCountdown() {
+    startButton.style.display = 'none';
+    countdownDiv.style.display = 'block';
+    
+    let count = 3;
+    countdownDiv.textContent = count;
+
+    countdownInterval = setInterval(() => {
+        count--;
+        countdownDiv.textContent = count;
+
+        if (count <= 0) {
+            clearInterval(countdownInterval);
+            countdownDiv.style.display = 'none';
+            gameRunning = true;
+            resetBall(); // Assicurati che la palla sia resettata all'inizio
+            gameLoop();
+        }
+    }, 1000);
+}
+
+startButton.addEventListener('click', startGameCountdown);
+
+// Disegna lo stato iniziale del gioco
+draw();
